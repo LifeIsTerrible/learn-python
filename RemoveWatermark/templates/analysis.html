@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>图片分析</title>
+    <style>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .image-info {
+            margin-bottom: 20px;
+        }
+        .actions {
+            margin-top: 20px;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .button:hover {
+            background-color: #45a049;
+        }
+        .note {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 4px;
+        }
+        #imagePreview {
+            position: relative;
+            margin: 20px 0;
+            max-width: 100%;
+            overflow: hidden;
+        }
+        #previewImage {
+            max-width: 100%;
+            display: block;
+        }
+        #selectionArea {
+            position: absolute;
+            border: 2px solid #4CAF50;
+            background-color: rgba(76, 175, 80, 0.2);
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>图片分析</h1>
+        <div class="image-info">
+            <h2>图片信息</h2>
+            <ul>
+                <li>格式: {{ analysis['format'] }}</li>
+                <li>尺寸: {{ analysis['size'][0] }} x {{ analysis['size'][1] }}</li>
+                <li>模式: {{ analysis['mode'] }}</li>
+            </ul>
+        </div>
+
+        <div id="imagePreview">
+            <img id="previewImage" src="/uploads/{{ filename }}" alt="预览图片">
+            <div id="selectionArea"></div>
+        </div>
+
+        <div class="actions">
+            <h2>操作选项</h2>
+            <a href="/uploads/{{ filename }}" class="button" download>下载原图</a>
+            <button onclick="removeWatermark()" class="button">去除水印</button>
+        </div>
+
+        <div class="note">
+            <h3>水印去除说明：</h3>
+            <p>1. 在图片上按住鼠标左键并拖动来选择水印区域</p>
+            <p>2. 选择完成后，点击"去除水印"按钮</p>
+            <p>3. 处理完成后，将自动下载去除水印后的图片</p>
+        </div>
+    </div>
+
+    <script>
+        let startX, startY;
+        let isSelecting = false;
+        const imagePreview = document.getElementById('imagePreview');
+        const selectionArea = document.getElementById('selectionArea');
+        const previewImage = document.getElementById('previewImage');
+
+        imagePreview.addEventListener('mousedown', (e) => {
+            isSelecting = true;
+            startX = e.clientX - imagePreview.getBoundingClientRect().left;
+            startY = e.clientY - imagePreview.getBoundingClientRect().top;
+            selectionArea.style.display = 'block';
+            selectionArea.style.left = startX + 'px';
+            selectionArea.style.top = startY + 'px';
+        });
+
+        imagePreview.addEventListener('mousemove', (e) => {
+            if (!isSelecting) return;
+            
+            const currentX = e.clientX - imagePreview.getBoundingClientRect().left;
+            const currentY = e.clientY - imagePreview.getBoundingClientRect().top;
+            
+            const width = currentX - startX;
+            const height = currentY - startY;
+            
+            selectionArea.style.width = Math.abs(width) + 'px';
+            selectionArea.style.height = Math.abs(height) + 'px';
+            selectionArea.style.left = (width < 0 ? currentX : startX) + 'px';
+            selectionArea.style.top = (height < 0 ? currentY : startY) + 'px';
+        });
+
+        imagePreview.addEventListener('mouseup', () => {
+            isSelecting = false;
+        });
+
+        function removeWatermark() {
+            if (!selectionArea.style.width) {
+                alert('请先选择水印区域');
+                return;
+            }
+
+            const rect = selectionArea.getBoundingClientRect();
+            const imageRect = previewImage.getBoundingClientRect();
+            
+            const coordinates = {
+                x: (rect.left - imageRect.left) / imageRect.width,
+                y: (rect.top - imageRect.top) / imageRect.height,
+                width: rect.width / imageRect.width,
+                height: rect.height / imageRect.height
+            };
+
+            fetch('/remove_watermark/{{ filename }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(coordinates)
+            })
+            .then(response => response.blob())
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'watermark_removed_{{ filename }}';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('处理失败，请重试');
+            });
+        }
+    </script>
+</body>
+</html>
